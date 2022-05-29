@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QObject, QThread
+from PyQt5.QtCore import QObject, QThread, QSize
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -19,7 +19,8 @@ from matplotlib.ticker import FuncFormatter
 from matplotlib import cm, colors
 
 from config.values import WNDSIZE, SLICE_SECONDS, TMPDIR, EMO_TMPFILE
-from ui.model import Model
+from summarizer.sum import Summarizer
+from ui.model import Model, SummaryWindow
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +29,28 @@ class MainWindow(QtWidgets.QDialog):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
+        self.sumw = None
         self.fig = Figure()
         self.ax = None
+        self.worker = None
         self.canvas = FigureCanvas(self.fig)
         self.button = QtWidgets.QPushButton('Start')
         self.button.clicked.connect(self.animate)
         self.button.clicked.connect(self.run_model)
 
-        # set the layout
+        self.sum_button = QtWidgets.QPushButton('Summary')
+        self.sum_button.clicked.connect(self.summarize)
+        self.sum_button.setEnabled(False)
+        
+        # set the layouts
+        innerLayout = QtWidgets.QHBoxLayout()
+        innerLayout.addWidget(self.button)
+        innerLayout.addWidget(self.sum_button)
+
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.canvas)
-        layout.addWidget(self.button)
+        layout.addLayout(innerLayout)
+        #layout.addWidget(self.button)
         self.setLayout(layout)
 
         self.show()
@@ -47,6 +59,7 @@ class MainWindow(QtWidgets.QDialog):
 
         if self.button.text() == "Start":
             self.button.setText("Stop")
+            self.sum_button.setEnabled(False)
 
             self.thread = QThread()
             self.worker = Model()
@@ -59,6 +72,7 @@ class MainWindow(QtWidgets.QDialog):
         
         elif self.button.text() == "Stop":
             self.button.setText("Start")
+            self.sum_button.setEnabled(True)
 
             self.worker.stop()
             self.thread.quit()
@@ -115,8 +129,18 @@ class MainWindow(QtWidgets.QDialog):
         self.ax2.set_yticks(np.linspace(self.ax2.get_yticks()[0], self.ax2.get_yticks()[-1], len(self.ax.get_yticks())), list(emojis.keys()))
         plt.tight_layout()
 
+    def summarize(self):
+        self.button.setEnabled(False)
+        self.sumw = SummaryWindow()
+        self.sumw.show()
+        self.button.setEnabled(True)
+        
+
     def close_event(self):
         logger.info("Exiting program")
-        self.worker.stop()
+        
+        if self.worker is not None:
+            self.worker.stop()
+        
         Model.wipe_files()
         sys.exit(0)
